@@ -139,7 +139,7 @@ with open("marginalized_info.json", "r") as f:
     marginalized_indices = json.load(f)['common_indices']
 for index_to_forget in tqdm(marginalized_indices, desc="re-traininig all"):
     y_pred, y_true = retrain_without_indices(index_to_forget)
-    performance_histogram = compute_retrained_performance(y_pred=y_pred, y_true=y, index_to_forget=index_to_forget, df_og=df, feature_cols=feature_cols)
+    performance_histogram = compute_retrained_performance(y_pred=y_pred, y_true=y_true, index_to_forget=index_to_forget, df_og=df, feature_cols=feature_cols)
     os.makedirs("retrained", exist_ok=True)
     with open(os.path.join("retrained", str(index_to_forget)+".json"), "w") as f:
         json.dump(performance_histogram, f, indent=4)
