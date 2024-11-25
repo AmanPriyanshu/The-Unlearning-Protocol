@@ -70,6 +70,7 @@ def main():
     input_filepath = 'adult_reduced.csv'
     df = read_and_clean_data(input_filepath)
     df = df.sample(frac=0.2)
+    df.to_csv("adult_subset.csv", index=False)
     print("Final df shape",df.shape)
     images_dir = create_images_directory('images')
     generate_histograms(df, images_dir)
