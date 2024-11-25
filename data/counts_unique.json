@@ -1,0 +1,62 @@
+{
+    "age": {
+        "17-26": 1460,
+        "33-41": 1331,
+        "50-90": 1302,
+        "41-50": 1254,
+        "26-33": 1165
+    },
+    "education": {
+        " HS-grad": 2084,
+        " Some-college": 1485,
+        " Bachelors": 1053,
+        " Masters": 369,
+        " Assoc-voc": 273,
+        " 11th": 225,
+        " Assoc-acdm": 198,
+        " 10th": 183,
+        " 7th-8th": 141,
+        " Prof-school": 116,
+        " 9th": 115,
+        " 12th": 98,
+        " Doctorate": 77,
+        " 5th-6th": 62,
+        " 1st-4th": 23,
+        " Preschool": 10
+    },
+    "education-num": {
+        "1-9": 2941,
+        "10-13": 1524,
+        "9-10": 1485,
+        "13-16": 562
+    },
+    "relationship": {
+        " Husband": 2590,
+        " Not-in-family": 1701,
+        " Own-child": 1019,
+        " Unmarried": 702,
+        " Wife": 322,
+        " Other-relative": 178
+    },
+    "race": {
+        " White": 5594,
+        " Black": 599,
+        " Asian-Pac-Islander": 193,
+        " Amer-Indian-Eskimo": 71,
+        " Other": 55
+    },
+    "gender": {
+        " Male": 4386,
+        " Female": 2126
+    },
+    "hours-per-week": {
+        "35-40": 3169,
+        "1-35": 1349,
+        "40-50": 1227,
+        "50-99": 767
+    },
+    "income": {
+        "<50k": 4941,
+        ">=50k": 1571
+    }
+}
