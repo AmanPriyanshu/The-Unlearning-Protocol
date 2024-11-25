@@ -2,9 +2,13 @@ import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tensorflow import keras
-from sklearn.model_selection import train_test_split
 import json
 import tensorflowjs as tfjs
+import os
+from math import log
+from tqdm import tqdm
+
+EPOCHS = 50
 
 df = pd.read_csv("adult_subset.csv")
 df.columns = df.columns.str.strip()
@@ -65,16 +69,77 @@ def complete_model(path="data.json"):
         d = json.load(f)
     X = np.array(d['X'])
     y = np.array(d['y'])
+    print("Original training with:", X.shape[0], "samples")
     model = keras.Sequential([
         tf.keras.layers.Dense(64, activation='relu', input_shape=(X.shape[1],)),
         tf.keras.layers.Dense(32, activation='relu'),
         tf.keras.layers.Dense(1, activation='sigmoid')
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-    model.fit(X, y, epochs=20, batch_size=32)
+    model.fit(X, y, epochs=EPOCHS, batch_size=32)
     tfjs_target_dir = 'tfjs_model'
     tfjs.converters.save_keras_model(model, tfjs_target_dir)
     print(f"Model saved for TensorFlow.js in directory: {tfjs_target_dir}/")
+    y_pred = model.predict(X).flatten()
+    return y_pred, y
+
+def compute_base_performance(y_pred, y_true, df, feature_cols):
+    base_performance_histogram = {}
+    for col in feature_cols:
+        base_performance_histogram[col] = {}
+        unique_attributes = sorted(list(set(df[col].tolist())))
+        for attribute in unique_attributes:
+            indices = df[df[col].isin([attribute])].index.tolist()
+            y_subset_pred = [i for idx,i in enumerate(y_pred) if idx in indices]
+            y_subset_true = [i for idx,i in enumerate(y_true) if idx in indices]
+            acc = sum(round(pred) == true for pred, true in zip(y_subset_pred, y_subset_true)) / len(y_subset_true)
+            loss = -sum(true * log(pred) + (1-true) * log(1-pred) for pred, true in zip(y_subset_pred, y_subset_true)) / len(y_subset_true)
+            base_performance_histogram[col][attribute] = {"loss": loss, "acc": acc}
+    with open("base_performance_histogram.json", "w") as f:
+        json.dump(base_performance_histogram, f, indent=4)
+
+def retrain_without_indices(index_to_forget, path="data.json"):
+    with open(path, "r") as f:
+        d = json.load(f)
+    d['X'] = [row for idx,row in enumerate(d['X']) if idx!=index_to_forget]
+    d['y'] = [row for idx,row in enumerate(d['y']) if idx!=index_to_forget]
+    X = np.array(d['X'])
+    y = np.array(d['y'])
+    print("Re-training with:", X.shape[0], "samples")
+    model = keras.Sequential([
+        tf.keras.layers.Dense(64, activation='relu', input_shape=(X.shape[1],)),
+        tf.keras.layers.Dense(32, activation='relu'),
+        tf.keras.layers.Dense(1, activation='sigmoid')
+    ])
+    model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+    model.fit(X, y, epochs=EPOCHS, batch_size=32)
+    y_pred = model.predict(X).flatten()
+    return y_pred, y
+
+def compute_retrained_performance(y_pred, y_true, index_to_forget, df_og, feature_cols):
+    df = df_og.copy(deep=True)
+    df = df.drop(index=df.index[index_to_forget])
+    performance_histogram = {}
+    for col in feature_cols:
+        performance_histogram[col] = {}
+        unique_attributes = sorted(list(set(df[col].tolist())))
+        for attribute in unique_attributes:
+            indices = df[df[col].isin([attribute])].index.tolist()
+            y_subset_pred = [i for idx,i in enumerate(y_pred) if idx in indices]
+            y_subset_true = [i for idx,i in enumerate(y_true) if idx in indices]
+            acc = sum(round(pred) == true for pred, true in zip(y_subset_pred, y_subset_true)) / len(y_subset_true)
+            loss = -sum(true * log(pred) + (1-true) * log(1-pred) for pred, true in zip(y_subset_pred, y_subset_true)) / len(y_subset_true)
+            performance_histogram[col][attribute] = {"loss": loss, "acc": acc}
+    return performance_histogram
 
 encode_data(df, feature_cols)
-complete_model()
+y_pred, y = complete_model()
+compute_base_performance(y_pred=y_pred, y_true=y, df=df, feature_cols=feature_cols)
+with open("marginalized_info.json", "r") as f:
+    marginalized_indices = json.load(f)['common_indices']
+for index_to_forget in tqdm(marginalized_indices, desc="re-traininig all"):
+    y_pred, y_true = retrain_without_indices(index_to_forget)
+    performance_histogram = compute_retrained_performance(y_pred=y_pred, y_true=y, index_to_forget=index_to_forget, df_og=df, feature_cols=feature_cols)
+    os.makedirs("retrained", exist_ok=True)
+    with open(os.path.join("retrained", str(index_to_forget)+".json"), "w") as f:
+        json.dump(performance_histogram, f, indent=4)
