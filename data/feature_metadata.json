@@ -1,0 +1,89 @@
+{
+  "features": {
+    "age": {
+      "start_index": 0,
+      "length": 5,
+      "mapping": {
+        "17-26": 0,
+        "26-33": 1,
+        "33-41": 2,
+        "41-50": 3,
+        "50-90": 4
+      }
+    },
+    "education": {
+      "start_index": 5,
+      "length": 16,
+      "mapping": {
+        " 10th": 0,
+        " 11th": 1,
+        " 12th": 2,
+        " 1st-4th": 3,
+        " 5th-6th": 4,
+        " 7th-8th": 5,
+        " 9th": 6,
+        " Assoc-acdm": 7,
+        " Assoc-voc": 8,
+        " Bachelors": 9,
+        " Doctorate": 10,
+        " HS-grad": 11,
+        " Masters": 12,
+        " Preschool": 13,
+        " Prof-school": 14,
+        " Some-college": 15
+      }
+    },
+    "education-num": {
+      "start_index": 21,
+      "length": 4,
+      "mapping": {
+        "1-9": 0,
+        "10-13": 1,
+        "13-16": 2,
+        "9-10": 3
+      }
+    },
+    "relationship": {
+      "start_index": 25,
+      "length": 6,
+      "mapping": {
+        " Husband": 0,
+        " Not-in-family": 1,
+        " Other-relative": 2,
+        " Own-child": 3,
+        " Unmarried": 4,
+        " Wife": 5
+      }
+    },
+    "race": {
+      "start_index": 31,
+      "length": 5,
+      "mapping": {
+        " Amer-Indian-Eskimo": 0,
+        " Asian-Pac-Islander": 1,
+        " Black": 2,
+        " Other": 3,
+        " White": 4
+      }
+    },
+    "gender": {
+      "start_index": 36,
+      "length": 2,
+      "mapping": {
+        " Female": 0,
+        " Male": 1
+      }
+    },
+    "hours-per-week": {
+      "start_index": 38,
+      "length": 4,
+      "mapping": {
+        "1-35": 0,
+        "35-40": 1,
+        "40-50": 2,
+        "50-99": 3
+      }
+    }
+  },
+  "total_features": 42
+}
