@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Unlearning Protocol</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1rem;
+            margin-top: 8px;
+        }
+
+        .scroll-section {
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .scroll-indicator {
+            text-align: center;
+            color: #666;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .scroll-arrow {
+            display: inline-block;
+            animation: bounceX 1.5s infinite;
+            font-size: 1.2em;
+        }
+
+        @keyframes bounceX {
+            0%, 100% { transform: translateX(-3px); }
+            50% { transform: translateX(3px); }
+        }
+
+        .histograms-container {
+            width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 20px 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .histograms-container::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        .histograms-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+
+        .histograms-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .histograms-container::-webkit-scrollbar-thumb:hover {
+            background: #666;
+        }
+
+        .histograms-scroll {
+            display: inline-flex;
+            padding: 0 20px;
+        }
+
+        .histogram-wrapper {
+            min-width: 300px;
+            height: 200px;
+            margin-right: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .histogram-wrapper:last-child {
+            margin-right: 0;
+        }
+
+        @media (max-width: 768px) {
+            .histogram-wrapper {
+                min-width: 260px;
+            }
+        }
+
+        .cards-section {
+            margin-top: 40px;
+            padding: 20px;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .data-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .data-card h3 {
+            margin-top: 0;
+            color: #2c5282;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 8px;
+            margin-bottom: 12px;
+        }
+
+        .feature-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding: 4px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .feature-label {
+            font-weight: 500;
+            color: #4a5568;
+        }
+
+        .feature-value {
+            color: #718096;
+        }
+
+        .loading-message {
+            text-align: center;
+            color: #666;
+            padding: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>The Unlearning Protocol</h1>
+        <p class="subtitle">Choose which data to make your model forget (Unlearn!), but watch out - every deletion ripples!</p>
+    </div>
+    
+    <div class="scroll-section">
+        <div class="scroll-indicator">
+            <span class="scroll-arrow">←</span>
+            Scroll horizontally to view all features
+            <span class="scroll-arrow">→</span>
+        </div>
+        <div class="histograms-container">
+            <div class="histograms-scroll" id="histogramsContainer"></div>
+        </div>
+    </div>
+
+    <div class="cards-section">
+        <h2>Selected Data Points</h2>
+        <div class="cards-container" id="dataCards">
+            <div class="loading-message">Loading data points...</div>
+        </div>
+    </div>
+
+    <script>
+        async function loadData() {
+            try {
+                const response = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load data');
+                }
+                const data = await response.json();
+                createHistograms(data);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('histogramsContainer').innerHTML = 
+                    '<p style="color: red; padding: 20px;">Error loading feature distributions. Please try refreshing the page.</p>';
+            }
+        }
+
+        function createHistograms(data) {
+            const container = document.getElementById('histogramsContainer');
+            
+            Object.entries(data).forEach(([feature, counts]) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'histogram-wrapper';
+                
+                const canvas = document.createElement('canvas');
+                wrapper.appendChild(canvas);
+                container.appendChild(wrapper);
+
+                new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(counts),
+                        datasets: [{
+                            label: feature,
+                            data: Object.values(counts),
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    maxRotation: 0,
+                                    autoSkip: true
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    autoSkip: true
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        // Start loading data when the page is ready
+        document.addEventListener('DOMContentLoaded', loadData);
+        let globalData = {
+            countsUnique: null,
+            rawData: null,
+            processedData: null,
+            retrainedIndices: null
+        };
+
+        async function loadAllData() {
+            try {
+                // Load counts_unique.json (previous functionality)
+                const countsResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
+                globalData.countsUnique = await countsResponse.json();
+                createHistograms(globalData.countsUnique);
+
+                // Load adult_subset.csv
+                const csvResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/adult_subset.json');
+                const csvText = await csvResponse.text();
+                globalData.rawData = Papa.parse(csvText, { header: true }).data;
+                console.log('Loaded CSV data:', globalData.rawData.length, 'rows');
+
+                // Load data.json
+                const jsonResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
+                globalData.processedData = await jsonResponse.json();
+                console.log('Loaded processed data:', globalData.processedData);
+
+                // Get list of available retrained indices
+                const retrainedResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/index.json');
+                globalData.retrainedIndices = await retrainedResponse.json();
+                console.log('Available retrained indices:', globalData.retrainedIndices);
+
+                // Select and display random cards
+                createRandomCards();
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('dataCards').innerHTML = 
+                    '<p style="color: red; padding: 20px;">Error loading data. Please try refreshing the page.</p>';
+            }
+        }
+
+        function getRandomIndices(max, count) {
+            const indices = globalData.retrainedIndices.slice();
+            const selected = [];
+            
+            for (let i = 0; i < count && indices.length > 0; i++) {
+                const randomIndex = Math.floor(Math.random() * indices.length);
+                selected.push(indices.splice(randomIndex, 1)[0]);
+            }
+            
+            return selected;
+        }
+
+        function createDataCard(dataPoint, index) {
+            const card = document.createElement('div');
+            card.className = 'data-card';
+            
+            const content = `
+                <h3>Data Point #${index}</h3>
+                ${Object.entries(dataPoint)
+                    .map(([key, value]) => `
+                        <div class="feature-item">
+                            <span class="feature-label">${key}:</span>
+                            <span class="feature-value">${value}</span>
+                        </div>
+                    `).join('')}
+            `;
+            
+            card.innerHTML = content;
+            return card;
+        }
+
+        function createRandomCards() {
+            const container = document.getElementById('dataCards');
+            container.innerHTML = ''; // Clear loading message
+            
+            const selectedIndices = getRandomIndices(globalData.rawData.length, 4);
+            console.log('Selected indices:', selectedIndices);
+            
+            selectedIndices.forEach(index => {
+                const dataPoint = globalData.rawData[index];
+                if (dataPoint) {
+                    const card = createDataCard(dataPoint, index);
+                    container.appendChild(card);
+                }
+            });
+        }
+
+        // Start loading data when the page is ready
+        document.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+</body>
+</html>
