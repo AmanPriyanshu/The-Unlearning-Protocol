@@ -321,6 +321,67 @@
     color: #333;
 }
 
+.info-container {
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.info-section {
+    margin-bottom: 30px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border-left: 4px solid #2196F3;
+}
+
+.info-section:last-child {
+    margin-bottom: 0;
+}
+
+.info-section h2 {
+    color: #1976D2;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.4rem;
+}
+
+.info-section p {
+    color: #333;
+    line-height: 1.6;
+    margin: 0;
+}
+
+.info-section ol {
+    margin: 0;
+    padding-left: 20px;
+}
+
+.info-section li {
+    margin: 10px 0;
+    color: #333;
+    line-height: 1.6;
+}
+
+.info-section strong {
+    color: #1976D2;
+}
+
+@media (min-width: 768px) {
+    .info-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 20px;
+    }
+    
+    .info-section {
+        margin-bottom: 0;
+    }
+}
+
     </style>
 </head>
 <body>
@@ -334,6 +395,32 @@
     <div class="header">
         <h1>The Unlearning Protocol</h1>
         <p class="subtitle">Choose which data to make your model forget (Unlearn!), but watch out - every deletion ripples!</p>
+        
+        <div class="info-container">
+            <div class="info-section">
+                <h2>What is Machine Unlearning?</h2>
+                <p>Machine unlearning is the process of making a trained AI model selectively forget specific data points while maintaining its performance on other data. Think of it as surgical removal of information from the model's memory.</p>
+            </div>
+            
+            <div class="info-section">
+                <h2>The Ripple Effect</h2>
+                <p>When you make a model forget one piece of data, it affects how the model performs on similar data points. This creates a "ripple effect" across different demographic groups. For example, making the model forget data about one age group might affect its predictions for other age groups.</p>
+            </div>
+            
+            <div class="info-section">
+                <h2>How to Play</h2>
+                <ol>
+                    <li><strong>Select a Card:</strong> Each card represents a person's data that you can make the model forget.</li>
+                    <li><strong>Configure Unlearning:</strong> Adjust how aggressively the model should forget using the sliders.</li>
+                    <li><strong>Observe Impact:</strong> Watch how your choice affects the model's performance across different groups.</li>
+                </ol>
+            </div>
+            
+            <div class="info-section">
+                <h2>Your Goal</h2>
+                <p>Choose data points to unlearn that will have minimal negative impact on the model's overall fairness. Try to maintain balanced performance across all demographic groups while successfully removing the targeted information.</p>
+            </div>
+        </div>
     </div>
     
     <div class="scroll-section">
