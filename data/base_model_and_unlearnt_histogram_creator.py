@@ -114,7 +114,7 @@ def retrain_without_indices(index_to_forget, path="data.json"):
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     model.fit(X, y, epochs=EPOCHS, batch_size=32)
     y_pred = model.predict(X).flatten()
-    return y_pred, y
+    return y_pred, y, d['X'][index_to_forget], d['y'][index_to_forget]
 
 def compute_retrained_performance(y_pred, y_true, index_to_forget, df_og, feature_cols):
     df = df_og.copy(deep=True)
@@ -138,8 +138,9 @@ compute_base_performance(y_pred=y_pred, y_true=y, df=df, feature_cols=feature_co
 with open("marginalized_info.json", "r") as f:
     marginalized_indices = json.load(f)['common_indices']
 for index_to_forget in tqdm(marginalized_indices, desc="re-traininig all"):
-    y_pred, y_true = retrain_without_indices(index_to_forget)
+    y_pred, y_true, forget_X, forget_y = retrain_without_indices(index_to_forget)
+    sample_to_forget = row_dict = df.loc[index_to_forget].to_dict()
     performance_histogram = compute_retrained_performance(y_pred=y_pred, y_true=y_true, index_to_forget=index_to_forget, df_og=df, feature_cols=feature_cols)
     os.makedirs("retrained", exist_ok=True)
     with open(os.path.join("retrained", str(index_to_forget)+".json"), "w") as f:
-        json.dump(performance_histogram, f, indent=4)
+        json.dump({'forget_x':forget_X, 'forget_y': forget_y, 'sample': sample_to_forget,'performance':performance_histogram}, f, indent=4)

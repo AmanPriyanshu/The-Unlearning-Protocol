@@ -98,60 +98,79 @@
             margin-right: 0;
         }
 
-        @media (max-width: 768px) {
-            .histogram-wrapper {
-                min-width: 260px;
-            }
-        }
-
-        .cards-section {
-            margin-top: 40px;
-            padding: 20px;
-        }
-
         .cards-container {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 20px;
-            margin-top: 20px;
+            padding: 20px;
+            margin-top: 30px;
         }
 
-        .data-card {
+        .sample-card {
             background: white;
             border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
         }
 
-        .data-card h3 {
-            margin-top: 0;
-            color: #2c5282;
-            border-bottom: 2px solid #e2e8f0;
-            padding-bottom: 8px;
-            margin-bottom: 12px;
+        .sample-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
         }
 
-        .feature-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            padding: 4px 0;
-            border-bottom: 1px solid #f0f0f0;
+        .sample-card.selected {
+            border-color: #4CAF50;
+            background: #f8fff8;
+        }
+
+        .sample-card h3 {
+            margin: 0 0 15px 0;
+            color: #2196F3;
+            font-size: 1.1rem;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px;
+            margin-bottom: 15px;
         }
 
         .feature-label {
+            color: #666;
             font-weight: 500;
-            color: #4a5568;
         }
 
         .feature-value {
-            color: #718096;
+            color: #333;
+            text-align: right;
         }
 
-        .loading-message {
-            text-align: center;
-            color: #666;
-            padding: 20px;
+        .income-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: white;
+            background: #666;
+        }
+
+        .income-tag.high {
+            background: #4CAF50;
+        }
+
+        .income-tag.low {
+            background: #FF9800;
+        }
+
+        @media (max-width: 768px) {
+            .histogram-wrapper {
+                min-width: 260px;
+            }
         }
     </style>
 </head>
@@ -172,17 +191,10 @@
         </div>
     </div>
 
-    <div class="cards-section">
-        <h2>Selected Data Points</h2>
-        <div class="cards-container" id="dataCards">
-            <div class="loading-message">Loading data points...</div>
-        </div>
-    </div>
-
     <script>
         async function loadData() {
             try {
-                const response = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
+                const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
                 if (!response.ok) {
                     throw new Error('Failed to load data');
                 }
@@ -249,95 +261,6 @@
 
         // Start loading data when the page is ready
         document.addEventListener('DOMContentLoaded', loadData);
-        let globalData = {
-            countsUnique: null,
-            rawData: null,
-            processedData: null,
-            retrainedIndices: null
-        };
-
-        async function loadAllData() {
-            try {
-                // Load counts_unique.json (previous functionality)
-                const countsResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
-                globalData.countsUnique = await countsResponse.json();
-                createHistograms(globalData.countsUnique);
-
-                // Load adult_subset.csv
-                const csvResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/adult_subset.json');
-                const csvText = await csvResponse.text();
-                globalData.rawData = Papa.parse(csvText, { header: true }).data;
-                console.log('Loaded CSV data:', globalData.rawData.length, 'rows');
-
-                // Load data.json
-                const jsonResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
-                globalData.processedData = await jsonResponse.json();
-                console.log('Loaded processed data:', globalData.processedData);
-
-                // Get list of available retrained indices
-                const retrainedResponse = await fetch('https://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/index.json');
-                globalData.retrainedIndices = await retrainedResponse.json();
-                console.log('Available retrained indices:', globalData.retrainedIndices);
-
-                // Select and display random cards
-                createRandomCards();
-
-            } catch (error) {
-                console.error('Error loading data:', error);
-                document.getElementById('dataCards').innerHTML = 
-                    '<p style="color: red; padding: 20px;">Error loading data. Please try refreshing the page.</p>';
-            }
-        }
-
-        function getRandomIndices(max, count) {
-            const indices = globalData.retrainedIndices.slice();
-            const selected = [];
-            
-            for (let i = 0; i < count && indices.length > 0; i++) {
-                const randomIndex = Math.floor(Math.random() * indices.length);
-                selected.push(indices.splice(randomIndex, 1)[0]);
-            }
-            
-            return selected;
-        }
-
-        function createDataCard(dataPoint, index) {
-            const card = document.createElement('div');
-            card.className = 'data-card';
-            
-            const content = `
-                <h3>Data Point #${index}</h3>
-                ${Object.entries(dataPoint)
-                    .map(([key, value]) => `
-                        <div class="feature-item">
-                            <span class="feature-label">${key}:</span>
-                            <span class="feature-value">${value}</span>
-                        </div>
-                    `).join('')}
-            `;
-            
-            card.innerHTML = content;
-            return card;
-        }
-
-        function createRandomCards() {
-            const container = document.getElementById('dataCards');
-            container.innerHTML = ''; // Clear loading message
-            
-            const selectedIndices = getRandomIndices(globalData.rawData.length, 4);
-            console.log('Selected indices:', selectedIndices);
-            
-            selectedIndices.forEach(index => {
-                const dataPoint = globalData.rawData[index];
-                if (dataPoint) {
-                    const card = createDataCard(dataPoint, index);
-                    container.appendChild(card);
-                }
-            });
-        }
-
-        // Start loading data when the page is ready
-        document.addEventListener('DOMContentLoaded', loadAllData);
     </script>
 </body>
 </html>
