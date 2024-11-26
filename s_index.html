@@ -289,18 +289,37 @@
         .evaluation-table tr:hover {background-color: #ddd;}
 
         .performance-container {
-            margin: 30px 20px;
-            padding: 20px;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
+    position: relative;
+    padding-bottom: 20px;
+}
 
         .performance-attribute-wrapper {
-            width: 100%;
-            height: 400px;
-            margin-bottom: 40px;
-        }
+    width: 100%;
+    height: auto;
+    min-height: 600px;
+    margin-bottom: 60px;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.performance-attribute-wrapper canvas {
+    width: 100% !important;
+    height: 250px !important;
+    margin-bottom: 30px;
+}
+
+#performanceHistograms > div {
+    margin-bottom: 40px;
+}
+
+/* Add proper padding for chart titles and legends */
+.performance-attribute-wrapper h3 {
+    margin: 0 0 20px 0;
+    padding: 0;
+    color: #333;
+}
 
     </style>
 </head>
@@ -368,6 +387,7 @@
     </div>
 
     <script>
+        let retrainedPerformanceData = null;
         let categoricalData = [];
 
         async function loadCategoricalData() {
@@ -419,56 +439,73 @@
         }
     
         function createHistograms(data) {
-            const container = document.getElementById('histogramsContainer');
-            
-            Object.entries(data).forEach(([feature, counts]) => {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'histogram-wrapper';
-                
-                const canvas = document.createElement('canvas');
-                wrapper.appendChild(canvas);
-                container.appendChild(wrapper);
+    const container = document.getElementById('histogramsContainer');
     
-                new Chart(canvas, {
-                    type: 'bar',
-                    data: {
-                        labels: Object.keys(counts),
-                        datasets: [{
-                            label: feature,
-                            data: Object.values(counts),
-                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                            borderColor: 'rgba(54, 162, 235, 1)',
-                            borderWidth: 1
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top'
+    // Define attributes to exclude
+    const excludedAttributes = ['race', 'gender', 'education', 'relationship'];
+    
+    Object.entries(data).forEach(([feature, counts]) => {
+        // Skip excluded attributes
+        if (excludedAttributes.includes(feature)) {
+            return;
+        }
+        
+        const wrapper = document.createElement('div');
+        wrapper.className = 'histogram-wrapper';
+        
+        const canvas = document.createElement('canvas');
+        wrapper.appendChild(canvas);
+        container.appendChild(wrapper);
+        
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: Object.keys(counts),
+                datasets: [{
+                    label: feature,
+                    data: Object.values(counts),
+                    backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                    borderColor: 'rgba(54, 162, 235, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            maxRotation: 0,
+                            autoSkip: true,
+                            callback: function(value) {
+                                if (value >= 1000) {
+                                    return (value/1000) + 'k';
+                                }
+                                return value;
                             }
-                        },
-                        scales: {
-                            y: {
-                                beginAtZero: true,
-                                ticks: {
-                                    maxRotation: 0,
-                                    autoSkip: true
-                                }
-                            },
-                            x: {
-                                ticks: {
-                                    maxRotation: 45,
-                                    autoSkip: true
-                                }
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            autoSkip: true,
+                            font: {
+                                size: 10
                             }
                         }
                     }
-                });
-            });
-        }
+                }
+            }
+        });
+    });
+}
     
         // Start loading data when the page is ready
         document.addEventListener('DOMContentLoaded', loadData);
@@ -590,7 +627,10 @@
                         if (!sampleData.forget_x || typeof sampleData.forget_y !== 'number') {
                             throw new Error('Invalid sample data format');
                         }
-                        
+                        if (!sampleData.performance) {
+                            throw new Error('Missing performance_extract in sample data');
+                        }
+                        retrainedPerformanceData = sampleData.performance;
                         await unlearn(sampleData.forget_x, sampleData.forget_y);
                         
                         // After unlearning, evaluate the model again
@@ -752,7 +792,11 @@
         createEvaluationTable(lossValues, accuracyValues);
         
         // Create performance histograms
-        createPerformanceHistograms(performance);
+        if (retrainedPerformanceData) {
+            createPerformanceHistograms(performance, retrainedPerformanceData);
+        } else {
+            createPerformanceHistograms(performance, null);
+        }
         
         updateProgress(100, 'Evaluation complete!');
     } catch (error) {
@@ -799,11 +843,7 @@ async function createEvaluationTable(lossValues, accuracyValues) {
 function aggregatePerformance(lossValues, accuracyValues) {
     const performance = {
         "age": {},
-        "education": {},
         "education-num": {},
-        "relationship": {},
-        "race": {},
-        "gender": {},
         "hours-per-week": {}
     };
     
@@ -842,12 +882,12 @@ function aggregatePerformance(lossValues, accuracyValues) {
     return performance;
 }
 
-function createPerformanceHistograms(performanceData) {
+function createPerformanceHistograms(currentPerformanceData, retrainedPerformanceData) {
     const container = document.getElementById('performanceHistograms');
     container.innerHTML = ''; // Clear any existing histograms
-    
-    Object.entries(performanceData).forEach(([attribute, categories]) => {
-        // Create a wrapper for each attribute's histogram
+
+    Object.entries(currentPerformanceData).forEach(([attribute, categories]) => {
+        // Create a wrapper for each attribute's histograms
         const wrapper = document.createElement('div');
         wrapper.className = 'performance-attribute-wrapper';
         
@@ -856,42 +896,55 @@ function createPerformanceHistograms(performanceData) {
         title.textContent = `Attribute: ${attribute}`;
         wrapper.appendChild(title);
         
-        // Create a canvas for the Chart.js histogram
-        const canvas = document.createElement('canvas');
-        canvas.id = `performanceChart_${attribute}`;
-        wrapper.appendChild(canvas);
+        // Create a canvas for the Loss Comparison Chart
+        const lossCanvas = document.createElement('canvas');
+        lossCanvas.id = `lossChart_${attribute}`;
+        wrapper.appendChild(lossCanvas);
+        
+        // Create a canvas for the Accuracy Comparison Chart
+        const accCanvas = document.createElement('canvas');
+        accCanvas.id = `accChart_${attribute}`;
+        wrapper.appendChild(accCanvas);
         
         container.appendChild(wrapper);
         
-        // Prepare data for the chart
-        const labels = [];
-        const lossData = [];
-        const accData = [];
+        // Prepare data for Loss Chart
+        const lossLabels = [];
+        const unlearningLossData = [];
+        const retrainingLossData = [];
         
         Object.entries(categories).forEach(([category, metrics]) => {
-            labels.push(category);
-            lossData.push(metrics.loss);
-            accData.push(metrics.acc);
+            lossLabels.push(category);
+            unlearningLossData.push(metrics.loss);
+            if (
+                retrainedPerformanceData &&
+                retrainedPerformanceData[attribute] &&
+                retrainedPerformanceData[attribute][category]
+            ) {
+                retrainingLossData.push(retrainedPerformanceData[attribute][category].loss);
+            } else {
+                retrainingLossData.push(null); // You can replace null with a default value like 0 if preferred
+            }
         });
         
-        // Create the Chart.js bar chart
-        new Chart(canvas, {
+        // Create the Loss Comparison Chart
+        new Chart(lossCanvas, {
             type: 'bar',
             data: {
-                labels: labels,
+                labels: lossLabels,
                 datasets: [
                     {
-                        label: 'Loss',
-                        data: lossData,
+                        label: 'Unlearning Loss',
+                        data: unlearningLossData,
                         backgroundColor: 'rgba(255, 99, 132, 0.5)',
                         borderColor: 'rgba(255, 99, 132, 1)',
                         borderWidth: 1
                     },
                     {
-                        label: 'Accuracy',
-                        data: accData,
-                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
-                        borderColor: 'rgba(54, 162, 235, 1)',
+                        label: 'Retraining Loss',
+                        data: retrainingLossData,
+                        backgroundColor: 'rgba(75, 192, 192, 0.5)',
+                        borderColor: 'rgba(75, 192, 192, 1)',
                         borderWidth: 1
                     }
                 ]
@@ -901,19 +954,106 @@ function createPerformanceHistograms(performanceData) {
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'top',
+                        display: true,
+                        position: 'top'
                     },
                     title: {
-                        display: false,
-                        text: `Performance for ${attribute}`
+                        display: true,
+                        text: `Loss Comparison for ${attribute}`
                     }
                 },
                 scales: {
                     y: {
                         beginAtZero: true,
+                        ticks: {
+                            maxRotation: 0,
+                            autoSkip: true
+                        },
                         title: {
                             display: true,
-                            text: 'Metric Value'
+                            text: 'Loss Value'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            autoSkip: true
+                        }
+                    }
+                }
+            }
+        });
+        
+        // Prepare data for Accuracy Chart
+        const accLabels = [];
+        const unlearningAccData = [];
+        const retrainingAccData = [];
+        
+        Object.entries(categories).forEach(([category, metrics]) => {
+            accLabels.push(category);
+            unlearningAccData.push(metrics.acc);
+            if (
+                retrainedPerformanceData &&
+                retrainedPerformanceData[attribute] &&
+                retrainedPerformanceData[attribute][category]
+            ) {
+                retrainingAccData.push(retrainedPerformanceData[attribute][category].acc);
+            } else {
+                retrainingAccData.push(null); // You can replace null with a default value like 0 if preferred
+            }
+        });
+        
+        // Create the Accuracy Comparison Chart
+        new Chart(accCanvas, {
+            type: 'bar',
+            data: {
+                labels: accLabels,
+                datasets: [
+                    {
+                        label: 'Unlearning Accuracy',
+                        data: unlearningAccData,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Retraining Accuracy',
+                        data: retrainingAccData,
+                        backgroundColor: 'rgba(255, 206, 86, 0.5)',
+                        borderColor: 'rgba(255, 206, 86, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'top'
+                    },
+                    title: {
+                        display: true,
+                        text: `Accuracy Comparison for ${attribute}`
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 1, // Assuming accuracy is between 0 and 1
+                        ticks: {
+                            stepSize: 0.1
+                        },
+                        title: {
+                            display: true,
+                            text: 'Accuracy'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            autoSkip: true
                         }
                     }
                 }
