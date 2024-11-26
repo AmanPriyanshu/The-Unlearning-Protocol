@@ -6,6 +6,7 @@
     <title>The Unlearning Protocol</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     
     <style>
         body {
@@ -219,9 +220,98 @@
             background: #ccc;
             cursor: not-allowed;
         }
+
+        .progress-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            display: none;
+        }
+
+        .progress-bar-outer {
+            width: 100%;
+            height: 20px;
+            background: #eee;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .progress-bar-inner {
+            width: 0%;
+            height: 100%;
+            background: #2196F3;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            margin-top: 10px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .evaluation-container {
+            margin: 30px 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .evaluation-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .evaluation-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .evaluation-table th, .evaluation-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+
+        .evaluation-table th {
+            background-color: #f2f2f2;
+            color: #333;
+        }
+
+        .evaluation-table tr:nth-child(even){background-color: #f9f9f9;}
+
+        .evaluation-table tr:hover {background-color: #ddd;}
+
+        .performance-container {
+            margin: 30px 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .performance-attribute-wrapper {
+            width: 100%;
+            height: 400px;
+            margin-bottom: 40px;
+        }
+
     </style>
 </head>
 <body>
+    <div class="progress-container" id="progressContainer">
+        <div class="progress-bar-outer">
+            <div class="progress-bar-inner" id="progressBar"></div>
+        </div>
+        <div class="progress-text" id="progressText">Preparing model...</div>
+    </div>
+
     <div class="header">
         <h1>The Unlearning Protocol</h1>
         <p class="subtitle">Choose which data to make your model forget (Unlearn!), but watch out - every deletion ripples!</p>
@@ -241,14 +331,13 @@
     <div class="cards-container" id="cardsContainer"></div>
 
     <div class="mechanism-container">
-        <h2>Select Unlearning Mechanism</h2>
+        <h2>Configure Unlearning</h2>
         
         <div class="mechanism-options">
             <div class="mechanism-option">
-                <input type="radio" id="gradientAscent" name="mechanism" value="gradient-ascent" checked>
-                <label for="gradientAscent">Gradient Ascent</label>
+                <h3>Gradient Ascent Parameters</h3>
                 
-                <div class="slider-group" id="gradientAscentSliders">
+                <div class="slider-group">
                     <div class="slider-container">
                         <label>Number of Epochs: <span id="numEpochsValue">10</span></label>
                         <input type="range" id="numEpochs" min="1" max="50" value="10">
@@ -259,34 +348,52 @@
                     </div>
                 </div>
             </div>
-
-            <div class="mechanism-option">
-                <input type="radio" id="gradientAscentDescent" name="mechanism" value="gradient-ascent-descent">
-                <label for="gradientAscentDescent">Gradient Ascent with Subsampled Descent</label>
-                <p class="descent-note">Note: 15 random samples will be selected for descent</p>
-                
-                <div class="slider-group" id="gradientAscentDescentSliders">
-                    <div class="slider-container">
-                        <label>Number of Epochs: <span id="numEpochsGADValue">10</span></label>
-                        <input type="range" id="numEpochsGAD" min="1" max="50" value="10">
-                    </div>
-                    <div class="slider-container">
-                        <label>Ascent Learning Rate: <span id="ascentLrValue">0.01</span></label>
-                        <input type="range" id="ascentLearningRate" min="0.001" max="0.1" step="0.001" value="0.01">
-                    </div>
-                    <div class="slider-container">
-                        <label>Descent Learning Rate: <span id="descentLrValue">0.005</span></label>
-                        <input type="range" id="descentLearningRate" min="0.001" max="0.1" step="0.001" value="0.005">
-                    </div>
-                </div>
-            </div>
         </div>
 
         <button id="submitUnlearning" class="submit-btn" disabled>Start Unlearning</button>
     </div>
 
+    <!-- Evaluation Results Section -->
+    <div class="performance-container" id="performanceContainer">
+        <h2>Performance by Categorical Attributes</h2>
+        <div id="performanceHistograms"></div>
+    </div>
+    
+    <div class="evaluation-container" id="evaluationContainer">
+        <h2>Model Performance Assessment</h2>
+        <button id="evaluateModelBtn" class="submit-btn">Assess Performance on Training Data</button>
+        <div id="evaluationResults" style="margin-top: 20px;">
+            <!-- Results will be populated here -->
+        </div>
+    </div>
+
     <script>
-        // Previous histogram and card loading code remains the same
+        let categoricalData = [];
+
+        async function loadCategoricalData() {
+            try {
+                const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/adult_subset.csv');
+                if (!response.ok) {
+                    throw new Error('Failed to load categorical data');
+                }
+                const csvText = await response.text();
+                const parsed = Papa.parse(csvText, { header: true, skipEmptyLines: true });
+                categoricalData = parsed.data.map(row => ({
+                    age: row['age'].trim(),
+                    education: row['education'].trim(),
+                    'education-num': row['education-num'].trim(),
+                    relationship: row['relationship'].trim(),
+                    race: row['race'].trim(),
+                    gender: row['gender'].trim(),
+                    'hours-per-week': row['hours-per-week'].trim(),
+                    income: row['income'].trim()
+                }));
+            } catch (error) {
+                console.error('Error loading categorical data:', error);
+                document.getElementById('performanceHistograms').innerHTML = 
+                    '<p style="color: red; padding: 20px;">Error loading categorical data. Please try refreshing the page.</p>';
+            }
+        }
         async function loadData() {
             try {
                 const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
@@ -302,6 +409,15 @@
             }
         }
 
+        function setupEvaluationButton() {
+            const evaluateBtn = document.getElementById('evaluateModelBtn');
+            if (evaluateBtn) {
+                evaluateBtn.addEventListener('click', async () => {
+                    await evaluateModel();
+                });
+            }
+        }
+    
         function createHistograms(data) {
             const container = document.getElementById('histogramsContainer');
             
@@ -312,7 +428,7 @@
                 const canvas = document.createElement('canvas');
                 wrapper.appendChild(canvas);
                 container.appendChild(wrapper);
-
+    
                 new Chart(canvas, {
                     type: 'bar',
                     data: {
@@ -353,16 +469,19 @@
                 });
             });
         }
-
+    
         // Start loading data when the page is ready
         document.addEventListener('DOMContentLoaded', loadData);
-
+    
         let selectedCardIndex = null;
-
+    
         async function loadSamples() {
             try {
                 // First load the index file
                 const indexResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/index.json');
+                if (!indexResponse.ok) {
+                    throw new Error('Failed to load index file');
+                }
                 const {indices} = await indexResponse.json();
         
                 // Randomly select 4 indices
@@ -371,7 +490,12 @@
                 // Load each selected sample
                 const samples = await Promise.all(
                     selectedIndices.map(index => 
-                        fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${index}.json`).then(r => r.json())
+                        fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${index}.json`).then(r => {
+                            if (!r.ok) {
+                                throw new Error(`Failed to load sample ${index}`);
+                            }
+                            return r.json();
+                        })
                     )
                 );
                 
@@ -382,12 +506,12 @@
                     '<p style="color: red; padding: 20px;">Error loading samples. Please try refreshing the page.</p>';
             }
         }
-
+    
         function shuffleAndSelect(array, n) {
             const shuffled = array.slice().sort(() => Math.random() - 0.5);
             return shuffled.slice(0, n);
         }
-
+    
         function displaySamples(samples, indices) {
             const container = document.getElementById('cardsContainer');
             container.innerHTML = ''; // Clear existing cards
@@ -420,7 +544,7 @@
                 container.appendChild(card);
             });
         }
-
+    
         function selectCard(card, index) {
             // Deselect all cards
             document.querySelectorAll('.sample-card').forEach(c => 
@@ -430,51 +554,81 @@
             card.classList.add('selected');
             selectedCardIndex = index;
             
-            // Here you could trigger any actions needed when a card is selected
-            console.log('Selected sample index:', index);
+            // Enable the submit button
+            document.getElementById('submitUnlearning').disabled = false;
         }
-        
+            
         // Add slider value update listeners
         function setupUnlearningControlListeners() {
-            const sliders = {
-                'numEpochs': 'numEpochsValue',
-                'learningRate': 'lrValue',
-                'numEpochsGAD': 'numEpochsGADValue',
-                'ascentLearningRate': 'ascentLrValue',
-                'descentLearningRate': 'descentLrValue'
-            };
-
-            Object.entries(sliders).forEach(([sliderId, valueId]) => {
-                const slider = document.getElementById(sliderId);
-                const value = document.getElementById(valueId);
-                slider.addEventListener('input', () => {
-                    value.textContent = slider.value;
-                });
+            // Update slider values
+            document.getElementById('numEpochs').addEventListener('input', (e) => {
+                document.getElementById('numEpochsValue').textContent = e.target.value;
             });
-
-            // Enable submit button when a card is selected
-            const submitBtn = document.getElementById('submitUnlearning');
-            const observer = new MutationObserver((mutations) => {
-                mutations.forEach((mutation) => {
-                    if (mutation.target.classList.contains('selected')) {
-                        submitBtn.disabled = false;
-                    }
-                });
-            });
-
-            document.querySelectorAll('.sample-card').forEach(card => {
-                observer.observe(card, { attributes: true });
+            
+            document.getElementById('learningRate').addEventListener('input', (e) => {
+                document.getElementById('lrValue').textContent = e.target.value;
             });
         }
-
+    
+        function setupSubmitButton() {
+            const submitBtn = document.getElementById('submitUnlearning');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', async () => {
+                    if (selectedCardIndex === null) {
+                        alert('Please select a sample to unlearn');
+                        return;
+                    }
+                    
+                    try {
+                        const response = await fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${selectedCardIndex}.json`);
+                        if (!response.ok) {
+                            throw new Error('Failed to load selected sample data');
+                        }
+                        const sampleData = await response.json();
+                        
+                        // Validate data format
+                        if (!sampleData.forget_x || typeof sampleData.forget_y !== 'number') {
+                            throw new Error('Invalid sample data format');
+                        }
+                        
+                        await unlearn(sampleData.forget_x, sampleData.forget_y);
+                        
+                        // After unlearning, evaluate the model again
+                        await evaluateModel();
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('Error during unlearning process');
+                    }
+                });
+            }
+        }
+    
+        let trainingX = null;
+        let trainingY = null;
         let model = null; // Global model variable
-
+    
         // Load the model
+        function updateProgress(progress, text) {
+            const progressBar = document.getElementById('progressBar');
+            const progressText = document.getElementById('progressText');
+            const progressContainer = document.getElementById('progressContainer');
+            
+            progressContainer.style.display = 'block';
+            progressBar.style.width = `${progress}%`;
+            progressText.textContent = text;
+            
+            if (progress === 100) {
+                setTimeout(() => {
+                    progressContainer.style.display = 'none';
+                }, 1000);
+            }
+        }
+    
         async function loadModel() {
             try {
-                // Create a fresh model if loading fails
-                const inputShape = [42];  // Length of forget_x array
+                updateProgress(0, 'Initializing model architecture...');
                 
+                const inputShape = [42];
                 model = tf.sequential({
                     layers: [
                         tf.layers.dense({
@@ -492,142 +646,356 @@
                         })
                     ]
                 });
-
-                const weightsResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/model.json');
-                const weightsData = await weightsResponse.json();
-                await model.loadWeights(weightsData);
+    
+                updateProgress(20, 'Compiling model...');
                 
-                console.log('Model loaded successfully');
+                model.compile({
+                    optimizer: tf.train.adam(0.001),
+                    loss: 'binaryCrossentropy',
+                    metrics: ['accuracy']
+                });
+    
+                updateProgress(40, 'Loading training data...');
+                
+                const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load training data');
+                }
+                const data = await response.json();
+                
+                updateProgress(60, 'Preparing tensors...');
+
+                trainingX = data.X;
+                trainingY = data.y;
+                
+                const xTrain = tf.tensor2d(data.X);
+                const yTrain = tf.tensor2d(data.y, [data.y.length, 1]);
+    
+                updateProgress(70, 'Training model...');
+                
+                await model.fit(xTrain, yTrain, {
+                    epochs: 5,
+                    batchSize: 32,
+                    validationSplit: 0.2,
+                    callbacks: {
+                        onEpochBegin: (epoch) => {
+                            const progress = 70 + ((epoch + 1) * 6); // Adjusted to reach 100
+                            updateProgress(Math.min(progress, 100), `Training epoch ${epoch + 1}/5...`);
+                        },
+                        onEpochEnd: (epoch, logs) => {
+                            console.log(`Epoch ${epoch + 1}: loss = ${logs.loss.toFixed(4)}, accuracy = ${logs.acc.toFixed(4)}`);
+                        }
+                    }
+                });
+    
+                xTrain.dispose();
+                yTrain.dispose();
+    
+                updateProgress(100, 'Training complete!');
+                console.log('Model training completed successfully');
             } catch (error) {
-                console.error('Error loading model:', error);
+                console.error('Error training model:', error);
+                updateProgress(100, 'Error training model');
+                throw error;
             }
         }
 
-        // Get random indices for descent
-        async function getRandomIndices(n, excludeIndex) {
-            const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
-            const data = await response.json();
-            let indices = Array.from({length: data.x.length}, (_, i) => i);
-            indices = indices.filter(i => i !== excludeIndex);
-            return shuffleAndSelect(indices, n);
+        function binaryCrossEntropy(target, prediction) {
+            const epsilon = 1e-7; // To prevent log(0)
+            const clippedPred = prediction.clipByValue(epsilon, 1 - epsilon);
+            const term1 = target.mul(clippedPred.log());
+            const term2 = tf.onesLike(target).sub(target).mul(tf.onesLike(clippedPred).sub(clippedPred).log());
+            const loss = term1.add(term2).mul(-1).mean();
+            return loss;
         }
 
-        // Gradient Ascent Step
-        async function gradientAscentStep(x, y, learningRate) {
-            const inputTensor = tf.tensor(x).expandDims(0);
-            const targetTensor = tf.tensor1d([y]);
+        async function evaluateModel() {
+    try {
+        updateProgress(0, 'Evaluating model performance...');
+        
+        // Convert training data to tensors
+        const xTensor = tf.tensor2d(trainingX);
+        const yTensor = tf.tensor2d(trainingY, [trainingY.length, 1]);
+        
+        // Get predictions
+        const predictions = model.predict(xTensor);
+        
+        // Calculate binary cross-entropy loss for each sample
+        const epsilon = 1e-7; // To prevent log(0)
+        const clippedPred = predictions.clipByValue(epsilon, 1 - epsilon);
+        const term1 = yTensor.mul(clippedPred.log());
+        const term2 = tf.onesLike(yTensor).sub(yTensor).mul(tf.onesLike(clippedPred).sub(clippedPred).log());
+        const sampleLosses = term1.add(term2).mul(-1); // Shape: [num_samples, 1]
+        
+        // Calculate accuracy for each sample
+        const predictedClasses = predictions.greaterEqual(0.5).cast('int32'); // 1 if >=0.5 else 0
+        const correctPredictions = predictedClasses.equal(yTensor.cast('int32'));
+        const sampleAccuracies = correctPredictions.cast('float32'); // 1.0 for correct, 0.0 for incorrect
+        
+        // Retrieve data from tensors
+        const lossValues = await sampleLosses.data();
+        const accuracyValues = await sampleAccuracies.data();
+        
+        // Dispose tensors to free memory
+        xTensor.dispose();
+        yTensor.dispose();
+        predictions.dispose();
+        sampleLosses.dispose();
+        predictedClasses.dispose();
+        correctPredictions.dispose();
+        sampleAccuracies.dispose();
+        
+        // Aggregate performance per categorical attribute
+        const performance = aggregatePerformance(lossValues, accuracyValues);
+        
+        // Create evaluation table
+        createEvaluationTable(lossValues, accuracyValues);
+        
+        // Create performance histograms
+        createPerformanceHistograms(performance);
+        
+        updateProgress(100, 'Evaluation complete!');
+    } catch (error) {
+        console.error('Error during evaluation:', error);
+        updateProgress(100, 'Error during evaluation');
+        alert('Error during model evaluation. Please check console for details.');
+    }
+}
 
-            return tf.tidy(() => {
-                const gradientTape = tf.grad(pred => {
-                    const prediction = model.predict(inputTensor);
-                    return tf.losses.binaryCrossentropy(targetTensor, prediction);
-                });
+async function createEvaluationTable(lossValues, accuracyValues) {
+    let tableHTML = `
+        <table class="evaluation-table">
+            <thead>
+                <tr>
+                    <th>Sample #</th>
+                    <th>Loss</th>
+                    <th>Accuracy</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    lossValues.forEach((loss, index) => {
+        const accuracy = accuracyValues[index] === 1.0 ? 'Correct' : 'Incorrect';
+        tableHTML += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${loss.toFixed(4)}</td>
+                <td>${accuracy}</td>
+            </tr>
+        `;
+    });
+    
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+    
+    // Populate the evaluationResults div
+    document.getElementById('evaluationResults').innerHTML = tableHTML;
+}
 
-                const gradients = gradientTape(model.trainable_weights);
-                
-                // Update weights with gradient ascent
-                model.trainable_weights.forEach((w, i) => {
-                    const newValue = w.add(gradients[i].mul(learningRate));
-                    w.assign(newValue);
-                });
-            });
+
+function aggregatePerformance(lossValues, accuracyValues) {
+    const performance = {
+        "age": {},
+        "education": {},
+        "education-num": {},
+        "relationship": {},
+        "race": {},
+        "gender": {},
+        "hours-per-week": {}
+    };
+    
+    // Ensure categoricalData is loaded and matches the training data
+    if (categoricalData.length !== trainingX.length) {
+        console.error('Categorical data length does not match training data length.');
+        return performance;
+    }
+    
+    trainingX.forEach((features, index) => {
+        const sampleCategorical = categoricalData[index];
+        const sampleLoss = lossValues[index];
+        const sampleAcc = accuracyValues[index];
+        
+        for (const attribute in performance) {
+            const category = sampleCategorical[attribute];
+            if (!performance[attribute][category]) {
+                performance[attribute][category] = { loss: 0, acc: 0, count: 0 };
+            }
+            performance[attribute][category].loss += sampleLoss;
+            performance[attribute][category].acc += sampleAcc;
+            performance[attribute][category].count += 1;
         }
-
-        // Gradient Descent Step
-        async function gradientDescentStep(x, y, learningRate) {
-            const inputTensor = tf.tensor(x).expandDims(0);
-            const targetTensor = tf.tensor1d([y]);
-
-            return tf.tidy(() => {
-                const gradientTape = tf.grad(pred => {
-                    const prediction = model.predict(inputTensor);
-                    return tf.losses.binaryCrossentropy(targetTensor, prediction);
-                });
-
-                const gradients = gradientTape(model.trainable_weights);
-                
-                // Update weights with gradient descent
-                model.trainable_weights.forEach((w, i) => {
-                    const newValue = w.sub(gradients[i].mul(learningRate));
-                    w.assign(newValue);
-                });
-            });
+    });
+    
+    // Compute average loss and accuracy
+    for (const attribute in performance) {
+        for (const category in performance[attribute]) {
+            const entry = performance[attribute][category];
+            entry.loss = parseFloat((entry.loss / entry.count).toFixed(4));
+            entry.acc = parseFloat((entry.acc / entry.count).toFixed(4));
+            delete entry.count; // Remove count as it's no longer needed
         }
+    }
+    
+    return performance;
+}
 
-        // Main unlearning function
+function createPerformanceHistograms(performanceData) {
+    const container = document.getElementById('performanceHistograms');
+    container.innerHTML = ''; // Clear any existing histograms
+    
+    Object.entries(performanceData).forEach(([attribute, categories]) => {
+        // Create a wrapper for each attribute's histogram
+        const wrapper = document.createElement('div');
+        wrapper.className = 'performance-attribute-wrapper';
+        
+        // Create a title for the attribute
+        const title = document.createElement('h3');
+        title.textContent = `Attribute: ${attribute}`;
+        wrapper.appendChild(title);
+        
+        // Create a canvas for the Chart.js histogram
+        const canvas = document.createElement('canvas');
+        canvas.id = `performanceChart_${attribute}`;
+        wrapper.appendChild(canvas);
+        
+        container.appendChild(wrapper);
+        
+        // Prepare data for the chart
+        const labels = [];
+        const lossData = [];
+        const accData = [];
+        
+        Object.entries(categories).forEach(([category, metrics]) => {
+            labels.push(category);
+            lossData.push(metrics.loss);
+            accData.push(metrics.acc);
+        });
+        
+        // Create the Chart.js bar chart
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Loss',
+                        data: lossData,
+                        backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        label: 'Accuracy',
+                        data: accData,
+                        backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                        borderColor: 'rgba(54, 162, 235, 1)',
+                        borderWidth: 1
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: false,
+                        text: `Performance for ${attribute}`
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Metric Value'
+                        }
+                    }
+                }
+            }
+        });
+    });
+}
+
+
         async function unlearn(forgetX, forgetY) {
-            const mechanism = document.querySelector('input[name="mechanism"]:checked').value;
             const submitBtn = document.getElementById('submitUnlearning');
             submitBtn.disabled = true;
             
             try {
-                if (mechanism === 'gradient-ascent') {
-                    const epochs = parseInt(document.getElementById('numEpochs').value);
-                    const lr = parseFloat(document.getElementById('learningRate').value);
+                updateProgress(0, 'Starting unlearning process...');
+                
+                const epochs = parseInt(document.getElementById('numEpochs').value);
+                const lr = parseFloat(document.getElementById('learningRate').value);
+                
+                // Flip the target for unlearning
+                const targetY = forgetY === 1 ? 0 : 1;
+                
+                // Create tensors for input and target
+                const inputTensor = tf.tensor2d([forgetX]); // Shape: [1, input_dim]
+                const targetTensor = tf.tensor2d([[targetY]]); // Shape: [1, 1]
+                
+                // Define an optimizer (using Adam optimizer)
+                const optimizer = tf.train.adam(lr);
+                
+                for (let epoch = 0; epoch < epochs; epoch++) {
+                    const progress = Math.min(((epoch + 1) / epochs) * 100, 100);
+                    updateProgress(progress, `Unlearning epoch ${epoch + 1}/${epochs}`);
                     
-                    // Flip the target
-                    const targetY = forgetY === 1 ? 0 : 1;
+                    // Perform a gradient descent step
+                    optimizer.minimize(() => {
+                        const prediction = model.predict(inputTensor);
+                        const loss = binaryCrossEntropy(targetTensor, prediction);
+                        return loss;
+                    }, /* returnCost */ true);
                     
-                    for (let i = 0; i < epochs; i++) {
-                        await gradientAscentStep(forgetX, targetY, lr);
-                    }
-                } else {
-                    const epochs = parseInt(document.getElementById('numEpochsGAD').value);
-                    const ascentLR = parseFloat(document.getElementById('ascentLearningRate').value);
-                    const descentLR = parseFloat(document.getElementById('descentLearningRate').value);
+                    // Optional: Log loss value
+                    const prediction = model.predict(inputTensor);
+                    const loss = binaryCrossEntropy(targetTensor, prediction);
+                    const lossValue = loss.dataSync()[0];
+                    console.log(`Epoch ${epoch + 1}: Loss = ${lossValue.toFixed(4)}`);
                     
-                    // Get random indices for descent
-                    const descentIndices = await getRandomIndices(15, selectedCardIndex);
-                    const dataResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
-                    const allData = await dataResponse.json();
-                    
-                    for (let i = 0; i < epochs; i++) {
-                        // Ascent step with flipped target
-                        const targetY = forgetY === 1 ? 0 : 1;
-                        await gradientAscentStep(forgetX, targetY, ascentLR);
-                        
-                        // Descent steps on random samples
-                        for (const idx of descentIndices) {
-                            await gradientDescentStep(allData.x[idx], allData.y[idx], descentLR);
-                        }
-                    }
+                    // Dispose tensors created inside the loop
+                    prediction.dispose();
+                    loss.dispose();
                 }
                 
+                // Dispose input and target tensors
+                inputTensor.dispose();
+                targetTensor.dispose();
+                
+                updateProgress(100, 'Unlearning complete!');
                 alert('Unlearning completed successfully!');
             } catch (error) {
                 console.error('Error during unlearning:', error);
+                updateProgress(100, 'Error during unlearning');
                 alert('Error during unlearning process. Please check console for details.');
             } finally {
                 submitBtn.disabled = false;
             }
         }
-
-        // Add submit handler
-        document.getElementById('submitUnlearning').addEventListener('click', async () => {
-            if (!selectedCardIndex) {
-                alert('Please select a sample to unlearn');
-                return;
-            }
-            
-            try {
-                const response = await fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${selectedCardIndex}.json`);
-                const sampleData = await response.json();
-                await unlearn(sampleData.forget_x, sampleData.forget_y);
-            } catch (error) {
-                console.error('Error:', error);
-                alert('Error during unlearning process');
-            }
-        });
-
-        // Modify initialize to load model
+    
+        // Initialize everything
         async function initialize() {
-            await loadModel();  // Load model first
-            await loadData();   // Load histograms
-            await loadSamples(); // Load cards
-            setupUnlearningControlListeners();
+            try {
+                await loadModel();   // Load and train model first
+                await loadData();    // Load histograms
+                await loadSamples(); // Load cards
+                await loadCategoricalData();
+                setupUnlearningControlListeners();
+                setupSubmitButton();
+                setupEvaluationButton();
+            } catch (error) {
+                console.error('Initialization error:', error);
+            }
         }
-
+    
         document.addEventListener('DOMContentLoaded', initialize);
-    </script>
+    </script>    
 </body>
 </html>
