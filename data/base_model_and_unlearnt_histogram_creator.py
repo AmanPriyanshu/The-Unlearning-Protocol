@@ -77,9 +77,9 @@ def complete_model(path="data.json"):
     ])
     model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
     model.fit(X, y, epochs=EPOCHS, batch_size=32)
-    tfjs_target_dir = 'tfjs_model'
-    tfjs.converters.save_keras_model(model, tfjs_target_dir)
-    print(f"Model saved for TensorFlow.js in directory: {tfjs_target_dir}/")
+    target_dir = 'model'
+    model.save(target_dir+'.h5')
+    print(f"Model saved for TensorFlow.js in directory: {target_dir}.h5")
     y_pred = model.predict(X).flatten()
     return y_pred, y
 

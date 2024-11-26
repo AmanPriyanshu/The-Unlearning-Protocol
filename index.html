@@ -167,6 +167,57 @@
             background: #FF9800;
         }
 
+        .mechanism-container {
+            margin: 30px 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .mechanism-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .mechanism-options {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .mechanism-option {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f8f8f8;
+        }
+
+        .mechanism-option label {
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .slider-group {
+            margin-top: 15px;
+            padding-left: 25px;
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: normal;
+        }
+
+        .slider-container input[type="range"] {
+            width: 100%;
+            max-width: 300px;
+        }
+
         @media (max-width: 768px) {
             .histogram-wrapper {
                 min-width: 260px;
@@ -189,6 +240,10 @@
         <div class="histograms-container">
             <div class="histograms-scroll" id="histogramsContainer"></div>
         </div>
+    </div>
+
+    <div class="cards-container" id="cardsContainer">
+        <!-- Cards will be dynamically inserted here -->
     </div>
 
     <script>
@@ -261,6 +316,92 @@
 
         // Start loading data when the page is ready
         document.addEventListener('DOMContentLoaded', loadData);
+
+        let selectedCardIndex = null;
+
+        async function loadSamples() {
+            try {
+                // First load the index file
+                const indexResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/index.json');
+                const {indices} = await indexResponse.json();
+        
+                // Randomly select 4 indices
+                const selectedIndices = shuffleAndSelect(indices, 4);
+                
+                // Load each selected sample
+                const samples = await Promise.all(
+                    selectedIndices.map(index => 
+                        fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${index}.json`).then(r => r.json())
+                    )
+                );
+                
+                displaySamples(samples, selectedIndices);
+            } catch (error) {
+                console.error('Error loading samples:', error);
+                document.getElementById('cardsContainer').innerHTML = 
+                    '<p style="color: red; padding: 20px;">Error loading samples. Please try refreshing the page.</p>';
+            }
+        }
+
+        function shuffleAndSelect(array, n) {
+            const shuffled = array.slice().sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, n);
+        }
+
+        function displaySamples(samples, indices) {
+            const container = document.getElementById('cardsContainer');
+            container.innerHTML = ''; // Clear existing cards
+            
+            samples.forEach((sample, idx) => {
+                const card = document.createElement('div');
+                card.className = 'sample-card';
+                card.dataset.index = indices[idx];
+                
+                const isHighIncome = sample.forget_y === 1;
+                
+                card.innerHTML = `
+                    <h3>Sample #${indices[idx]}</h3>
+                    <div class="feature-grid">
+                        ${Object.entries(sample.sample)
+                            .filter(([key]) => key !== 'income')
+                            .map(([key, value]) => `
+                                <span class="feature-label">${key}:</span>
+                                <span class="feature-value">${value}</span>
+                            `).join('')}
+                    </div>
+                    <div style="text-align: center">
+                        <span class="income-tag ${isHighIncome ? 'high' : 'low'}">
+                            ${sample.sample.income}
+                        </span>
+                    </div>
+                `;
+                
+                card.addEventListener('click', () => selectCard(card, indices[idx]));
+                container.appendChild(card);
+            });
+        }
+
+        function selectCard(card, index) {
+            // Deselect all cards
+            document.querySelectorAll('.sample-card').forEach(c => 
+                c.classList.remove('selected'));
+            
+            // Select the clicked card
+            card.classList.add('selected');
+            selectedCardIndex = index;
+            
+            // Here you could trigger any actions needed when a card is selected
+            console.log('Selected sample index:', index);
+        }
+
+        // Modify the original loadData function to also load samples
+        async function initialize() {
+            await loadData();  // Original histogram loading
+            await loadSamples(); // New sample loading
+        }
+
+        // Start everything when the page is ready
+        document.addEventListener('DOMContentLoaded', initialize);
     </script>
 </body>
 </html>

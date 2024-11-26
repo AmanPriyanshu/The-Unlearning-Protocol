@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Unlearning Protocol</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1rem;
+            margin-top: 8px;
+        }
+
+        .scroll-section {
+            position: relative;
+            margin-bottom: 40px;
+        }
+
+        .scroll-indicator {
+            text-align: center;
+            color: #666;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .scroll-arrow {
+            display: inline-block;
+            animation: bounceX 1.5s infinite;
+            font-size: 1.2em;
+        }
+
+        @keyframes bounceX {
+            0%, 100% { transform: translateX(-3px); }
+            50% { transform: translateX(3px); }
+        }
+
+        .histograms-container {
+            width: 100%;
+            overflow-x: auto;
+            white-space: nowrap;
+            padding: 20px 0;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .histograms-scroll {
+            display: inline-flex;
+            padding: 0 20px;
+        }
+
+        .histogram-wrapper {
+            min-width: 300px;
+            height: 200px;
+            margin-right: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+
+        .sample-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .sample-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        }
+
+        .sample-card.selected {
+            border-color: #4CAF50;
+            background: #f8fff8;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .feature-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .feature-value {
+            color: #333;
+            text-align: right;
+        }
+
+        .income-tag {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: white;
+        }
+
+        .income-tag.high {
+            background: #4CAF50;
+        }
+
+        .income-tag.low {
+            background: #FF9800;
+        }
+
+        .mechanism-container {
+            margin: 30px 20px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .mechanism-container h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .mechanism-options {
+            display: grid;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .mechanism-option {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f8f8f8;
+        }
+
+        .mechanism-option label {
+            font-weight: 500;
+            margin-left: 8px;
+        }
+
+        .slider-group {
+            margin-top: 15px;
+            padding-left: 25px;
+        }
+
+        .slider-container {
+            margin: 10px 0;
+        }
+
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: normal;
+        }
+
+        .slider-container input[type="range"] {
+            width: 100%;
+            max-width: 300px;
+        }
+
+        .descent-note {
+            margin: 8px 0;
+            font-size: 0.9em;
+            color: #666;
+            font-style: italic;
+        }
+
+        .submit-btn {
+            display: block;
+            width: 100%;
+            max-width: 200px;
+            margin: 20px auto 0;
+            padding: 12px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .submit-btn:hover:not(:disabled) {
+            background: #1976D2;
+        }
+
+        .submit-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>The Unlearning Protocol</h1>
+        <p class="subtitle">Choose which data to make your model forget (Unlearn!), but watch out - every deletion ripples!</p>
+    </div>
+    
+    <div class="scroll-section">
+        <div class="scroll-indicator">
+            <span class="scroll-arrow">←</span>
+            Scroll horizontally to view all features
+            <span class="scroll-arrow">→</span>
+        </div>
+        <div class="histograms-container">
+            <div class="histograms-scroll" id="histogramsContainer"></div>
+        </div>
+    </div>
+
+    <div class="cards-container" id="cardsContainer"></div>
+
+    <div class="mechanism-container">
+        <h2>Select Unlearning Mechanism</h2>
+        
+        <div class="mechanism-options">
+            <div class="mechanism-option">
+                <input type="radio" id="gradientAscent" name="mechanism" value="gradient-ascent" checked>
+                <label for="gradientAscent">Gradient Ascent</label>
+                
+                <div class="slider-group" id="gradientAscentSliders">
+                    <div class="slider-container">
+                        <label>Number of Epochs: <span id="numEpochsValue">10</span></label>
+                        <input type="range" id="numEpochs" min="1" max="50" value="10">
+                    </div>
+                    <div class="slider-container">
+                        <label>Learning Rate: <span id="lrValue">0.01</span></label>
+                        <input type="range" id="learningRate" min="0.001" max="0.1" step="0.001" value="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <div class="mechanism-option">
+                <input type="radio" id="gradientAscentDescent" name="mechanism" value="gradient-ascent-descent">
+                <label for="gradientAscentDescent">Gradient Ascent with Subsampled Descent</label>
+                <p class="descent-note">Note: 15 random samples will be selected for descent</p>
+                
+                <div class="slider-group" id="gradientAscentDescentSliders">
+                    <div class="slider-container">
+                        <label>Number of Epochs: <span id="numEpochsGADValue">10</span></label>
+                        <input type="range" id="numEpochsGAD" min="1" max="50" value="10">
+                    </div>
+                    <div class="slider-container">
+                        <label>Ascent Learning Rate: <span id="ascentLrValue">0.01</span></label>
+                        <input type="range" id="ascentLearningRate" min="0.001" max="0.1" step="0.001" value="0.01">
+                    </div>
+                    <div class="slider-container">
+                        <label>Descent Learning Rate: <span id="descentLrValue">0.005</span></label>
+                        <input type="range" id="descentLearningRate" min="0.001" max="0.1" step="0.001" value="0.005">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <button id="submitUnlearning" class="submit-btn" disabled>Start Unlearning</button>
+    </div>
+
+    <script>
+        // Previous histogram and card loading code remains the same
+        async function loadData() {
+            try {
+                const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/counts_unique.json');
+                if (!response.ok) {
+                    throw new Error('Failed to load data');
+                }
+                const data = await response.json();
+                createHistograms(data);
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('histogramsContainer').innerHTML = 
+                    '<p style="color: red; padding: 20px;">Error loading feature distributions. Please try refreshing the page.</p>';
+            }
+        }
+
+        function createHistograms(data) {
+            const container = document.getElementById('histogramsContainer');
+            
+            Object.entries(data).forEach(([feature, counts]) => {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'histogram-wrapper';
+                
+                const canvas = document.createElement('canvas');
+                wrapper.appendChild(canvas);
+                container.appendChild(wrapper);
+
+                new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(counts),
+                        datasets: [{
+                            label: feature,
+                            data: Object.values(counts),
+                            backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: {
+                                    maxRotation: 0,
+                                    autoSkip: true
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    maxRotation: 45,
+                                    autoSkip: true
+                                }
+                            }
+                        }
+                    }
+                });
+            });
+        }
+
+        // Start loading data when the page is ready
+        document.addEventListener('DOMContentLoaded', loadData);
+
+        let selectedCardIndex = null;
+
+        async function loadSamples() {
+            try {
+                // First load the index file
+                const indexResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/index.json');
+                const {indices} = await indexResponse.json();
+        
+                // Randomly select 4 indices
+                const selectedIndices = shuffleAndSelect(indices, 4);
+                
+                // Load each selected sample
+                const samples = await Promise.all(
+                    selectedIndices.map(index => 
+                        fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${index}.json`).then(r => r.json())
+                    )
+                );
+                
+                displaySamples(samples, selectedIndices);
+            } catch (error) {
+                console.error('Error loading samples:', error);
+                document.getElementById('cardsContainer').innerHTML = 
+                    '<p style="color: red; padding: 20px;">Error loading samples. Please try refreshing the page.</p>';
+            }
+        }
+
+        function shuffleAndSelect(array, n) {
+            const shuffled = array.slice().sort(() => Math.random() - 0.5);
+            return shuffled.slice(0, n);
+        }
+
+        function displaySamples(samples, indices) {
+            const container = document.getElementById('cardsContainer');
+            container.innerHTML = ''; // Clear existing cards
+            
+            samples.forEach((sample, idx) => {
+                const card = document.createElement('div');
+                card.className = 'sample-card';
+                card.dataset.index = indices[idx];
+                
+                const isHighIncome = sample.forget_y === 1;
+                
+                card.innerHTML = `
+                    <h3>Sample #${indices[idx]}</h3>
+                    <div class="feature-grid">
+                        ${Object.entries(sample.sample)
+                            .filter(([key]) => key !== 'income')
+                            .map(([key, value]) => `
+                                <span class="feature-label">${key}:</span>
+                                <span class="feature-value">${value}</span>
+                            `).join('')}
+                    </div>
+                    <div style="text-align: center">
+                        <span class="income-tag ${isHighIncome ? 'high' : 'low'}">
+                            ${sample.sample.income}
+                        </span>
+                    </div>
+                `;
+                
+                card.addEventListener('click', () => selectCard(card, indices[idx]));
+                container.appendChild(card);
+            });
+        }
+
+        function selectCard(card, index) {
+            // Deselect all cards
+            document.querySelectorAll('.sample-card').forEach(c => 
+                c.classList.remove('selected'));
+            
+            // Select the clicked card
+            card.classList.add('selected');
+            selectedCardIndex = index;
+            
+            // Here you could trigger any actions needed when a card is selected
+            console.log('Selected sample index:', index);
+        }
+        
+        // Add slider value update listeners
+        function setupUnlearningControlListeners() {
+            const sliders = {
+                'numEpochs': 'numEpochsValue',
+                'learningRate': 'lrValue',
+                'numEpochsGAD': 'numEpochsGADValue',
+                'ascentLearningRate': 'ascentLrValue',
+                'descentLearningRate': 'descentLrValue'
+            };
+
+            Object.entries(sliders).forEach(([sliderId, valueId]) => {
+                const slider = document.getElementById(sliderId);
+                const value = document.getElementById(valueId);
+                slider.addEventListener('input', () => {
+                    value.textContent = slider.value;
+                });
+            });
+
+            // Enable submit button when a card is selected
+            const submitBtn = document.getElementById('submitUnlearning');
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.target.classList.contains('selected')) {
+                        submitBtn.disabled = false;
+                    }
+                });
+            });
+
+            document.querySelectorAll('.sample-card').forEach(card => {
+                observer.observe(card, { attributes: true });
+            });
+        }
+
+        let model = null; // Global model variable
+
+        // Load the model
+        async function loadModel() {
+            try {
+                // Create a fresh model if loading fails
+                const inputShape = [42];  // Length of forget_x array
+                
+                model = tf.sequential({
+                    layers: [
+                        tf.layers.dense({
+                            inputShape: inputShape,
+                            units: 64,
+                            activation: 'relu'
+                        }),
+                        tf.layers.dense({
+                            units: 32,
+                            activation: 'relu'
+                        }),
+                        tf.layers.dense({
+                            units: 1,
+                            activation: 'sigmoid'
+                        })
+                    ]
+                });
+
+                const weightsResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/model.json');
+                const weightsData = await weightsResponse.json();
+                await model.loadWeights(weightsData);
+                
+                console.log('Model loaded successfully');
+            } catch (error) {
+                console.error('Error loading model:', error);
+            }
+        }
+
+        // Get random indices for descent
+        async function getRandomIndices(n, excludeIndex) {
+            const response = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
+            const data = await response.json();
+            let indices = Array.from({length: data.x.length}, (_, i) => i);
+            indices = indices.filter(i => i !== excludeIndex);
+            return shuffleAndSelect(indices, n);
+        }
+
+        // Gradient Ascent Step
+        async function gradientAscentStep(x, y, learningRate) {
+            const inputTensor = tf.tensor(x).expandDims(0);
+            const targetTensor = tf.tensor1d([y]);
+
+            return tf.tidy(() => {
+                const gradientTape = tf.grad(pred => {
+                    const prediction = model.predict(inputTensor);
+                    return tf.losses.binaryCrossentropy(targetTensor, prediction);
+                });
+
+                const gradients = gradientTape(model.trainable_weights);
+                
+                // Update weights with gradient ascent
+                model.trainable_weights.forEach((w, i) => {
+                    const newValue = w.add(gradients[i].mul(learningRate));
+                    w.assign(newValue);
+                });
+            });
+        }
+
+        // Gradient Descent Step
+        async function gradientDescentStep(x, y, learningRate) {
+            const inputTensor = tf.tensor(x).expandDims(0);
+            const targetTensor = tf.tensor1d([y]);
+
+            return tf.tidy(() => {
+                const gradientTape = tf.grad(pred => {
+                    const prediction = model.predict(inputTensor);
+                    return tf.losses.binaryCrossentropy(targetTensor, prediction);
+                });
+
+                const gradients = gradientTape(model.trainable_weights);
+                
+                // Update weights with gradient descent
+                model.trainable_weights.forEach((w, i) => {
+                    const newValue = w.sub(gradients[i].mul(learningRate));
+                    w.assign(newValue);
+                });
+            });
+        }
+
+        // Main unlearning function
+        async function unlearn(forgetX, forgetY) {
+            const mechanism = document.querySelector('input[name="mechanism"]:checked').value;
+            const submitBtn = document.getElementById('submitUnlearning');
+            submitBtn.disabled = true;
+            
+            try {
+                if (mechanism === 'gradient-ascent') {
+                    const epochs = parseInt(document.getElementById('numEpochs').value);
+                    const lr = parseFloat(document.getElementById('learningRate').value);
+                    
+                    // Flip the target
+                    const targetY = forgetY === 1 ? 0 : 1;
+                    
+                    for (let i = 0; i < epochs; i++) {
+                        await gradientAscentStep(forgetX, targetY, lr);
+                    }
+                } else {
+                    const epochs = parseInt(document.getElementById('numEpochsGAD').value);
+                    const ascentLR = parseFloat(document.getElementById('ascentLearningRate').value);
+                    const descentLR = parseFloat(document.getElementById('descentLearningRate').value);
+                    
+                    // Get random indices for descent
+                    const descentIndices = await getRandomIndices(15, selectedCardIndex);
+                    const dataResponse = await fetch('http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/data.json');
+                    const allData = await dataResponse.json();
+                    
+                    for (let i = 0; i < epochs; i++) {
+                        // Ascent step with flipped target
+                        const targetY = forgetY === 1 ? 0 : 1;
+                        await gradientAscentStep(forgetX, targetY, ascentLR);
+                        
+                        // Descent steps on random samples
+                        for (const idx of descentIndices) {
+                            await gradientDescentStep(allData.x[idx], allData.y[idx], descentLR);
+                        }
+                    }
+                }
+                
+                alert('Unlearning completed successfully!');
+            } catch (error) {
+                console.error('Error during unlearning:', error);
+                alert('Error during unlearning process. Please check console for details.');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
+
+        // Add submit handler
+        document.getElementById('submitUnlearning').addEventListener('click', async () => {
+            if (!selectedCardIndex) {
+                alert('Please select a sample to unlearn');
+                return;
+            }
+            
+            try {
+                const response = await fetch(`http://amanpriyanshu.github.io/The-Unlearning-Protocol/data/retrained/${selectedCardIndex}.json`);
+                const sampleData = await response.json();
+                await unlearn(sampleData.forget_x, sampleData.forget_y);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error during unlearning process');
+            }
+        });
+
+        // Modify initialize to load model
+        async function initialize() {
+            await loadModel();  // Load model first
+            await loadData();   // Load histograms
+            await loadSamples(); // Load cards
+            setupUnlearningControlListeners();
+        }
+
+        document.addEventListener('DOMContentLoaded', initialize);
+    </script>
+</body>
+</html>
